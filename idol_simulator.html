@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KPOP 爱豆模拟器</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+/* ==================== 基础重置与变量 ==================== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-dark:#0d0b1a;--bg-card:rgba(20,15,40,0.85);--bg-panel:rgba(25,18,50,0.9);
+  --pink:#ff6eb4;--purple:#a855f7;--blue:#6366f1;--gold:#fbbf24;--cyan:#22d3ee;
+  --text:#e8e0f0;--text-dim:#8b7fa8;--danger:#ef4444;--success:#22c55e;
+  --gradient:linear-gradient(135deg,var(--pink),var(--purple),var(--blue));
+  --gradient-h:linear-gradient(90deg,var(--pink),var(--purple),var(--blue),var(--cyan));
+  --shadow:0 4px 24px rgba(100,50,200,0.25);--radius:12px;
+  --font:'Noto Sans SC',sans-serif;
+}
+html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--bg-dark);color:var(--text)}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--purple);border-radius:3px}
+button{font-family:var(--font);cursor:pointer;border:none;outline:none;transition:all .2s}
+button:hover{transform:translateY(-1px);filter:brightness(1.15)}
+button:active{transform:translateY(0);filter:brightness(0.95)}
+input,select,textarea{font-family:var(--font);border:1px solid rgba(168,85,247,0.3);border-radius:8px;
+  padding:8px 12px;background:rgba(30,20,60,0.8);color:var(--text);font-size:14px;outline:none;transition:border .2s}
+input:focus,select:focus{border-color:var(--pink)}
+
+/* ==================== 星空背景 ==================== */
+#starfield{position:fixed;inset:0;z-index:0;overflow:hidden}
+.star{position:absolute;width:2px;height:2px;background:#fff;border-radius:50%;animation:twinkle var(--d) ease-in-out infinite alternate}
+@keyframes twinkle{0%{opacity:.2;transform:scale(.8)}100%{opacity:1;transform:scale(1.2)}}
+.shooting-star{position:absolute;width:80px;height:1px;background:linear-gradient(90deg,rgba(255,255,255,.8),transparent);
+  animation:shoot 3s linear infinite;opacity:0}
+@keyframes shoot{0%{transform:translateX(-100px) translateY(0);opacity:0}5%{opacity:1}30%{opacity:1;transform:translateX(300px) translateY(200px)}
+  100%{opacity:0;transform:translateX(800px) translateY(500px)}}
+
+/* ==================== 标题画面 ==================== */
+#title-screen{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at center,rgba(100,40,180,0.3) 0%,var(--bg-dark) 70%)}
+.title-logo{font-size:clamp(36px,7vw,72px);font-weight:900;background:var(--gradient-h);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:none;letter-spacing:4px;
+  animation:glow 2s ease-in-out infinite alternate;position:relative}
+.title-sub{font-size:clamp(14px,2.5vw,20px);color:var(--text-dim);margin-top:8px;letter-spacing:6px;font-weight:300}
+@keyframes glow{0%{filter:brightness(1)}100%{filter:brightness(1.3)}}
+.title-btn{margin-top:48px;padding:16px 64px;font-size:18px;font-weight:700;border-radius:50px;
+  background:var(--gradient);color:#fff;box-shadow:var(--shadow);letter-spacing:2px}
+.title-btn:hover{box-shadow:0 8px 32px rgba(168,85,247,0.5)}
+.title-ver{position:absolute;bottom:20px;color:var(--text-dim);font-size:12px}
+
+/* ==================== 角色创建 ==================== */
+#create-screen{position:fixed;inset:0;z-index:90;display:none;flex-direction:column;align-items:center;
+  justify-content:center;background:var(--bg-dark);overflow-y:auto;padding:20px}
+.create-card{background:var(--bg-card);border:1px solid rgba(168,85,247,0.2);border-radius:16px;
+  padding:32px;max-width:600px;width:100%;box-shadow:var(--shadow)}
+.create-card h2{text-align:center;background:var(--gradient-h);-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  font-size:24px;margin-bottom:24px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group.full{grid-column:1/-1}
+.form-group label{font-size:13px;color:var(--text-dim);font-weight:500}
+.btn-row{display:flex;gap:12px;margin-top:20px;justify-content:center}
+.btn-primary{padding:12px 32px;border-radius:10px;background:var(--gradient);color:#fff;font-weight:700;font-size:15px}
+.btn-secondary{padding:12px 32px;border-radius:10px;background:rgba(168,85,247,0.15);color:var(--purple);
+  border:1px solid rgba(168,85,247,0.3);font-weight:600;font-size:15px}
+.stat-preview{margin-top:16px;padding:16px;background:rgba(0,0,0,0.3);border-radius:10px;display:grid;
+  grid-template-columns:repeat(3,1fr);gap:8px;font-size:13px}
+.stat-preview span{color:var(--text-dim)}
+.stat-preview strong{color:var(--gold)}
+
+/* ==================== 游戏主界面 ==================== */
+#game-screen{position:fixed;inset:0;z-index:80;display:none;flex-direction:column}
+/* HUD 顶栏 */
+#hud{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;
+  padding:8px 16px;background:rgba(13,11,26,0.95);border-bottom:1px solid rgba(168,85,247,0.2);
+  backdrop-filter:blur(10px);min-height:48px;flex-shrink:0}
+.hud-left{display:flex;align-items:center;gap:12px;font-weight:700;font-size:15px}
+.hud-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:var(--gradient);color:#fff}
+.hud-info{display:flex;gap:16px;font-size:13px;align-items:center}
+.hud-item{display:flex;align-items:center;gap:4px}
+.hud-item .val{color:var(--gold);font-weight:600}
+.mood-icon{font-size:18px}
+/* 主内容区 */
+#main-content{display:flex;flex:1;overflow:hidden;position:relative}
+/* 左侧面板 */
+#left-panel{width:280px;flex-shrink:0;overflow-y:auto;padding:12px;background:var(--bg-panel);
+  border-right:1px solid rgba(168,85,247,0.15)}
+.panel-section{margin-bottom:16px}
+.panel-title{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:2px;
+  margin-bottom:8px;font-weight:600;display:flex;align-items:center;gap:6px}
+.stat-bar{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px}
+.stat-bar .label{width:50px;color:var(--text-dim);flex-shrink:0;font-size:12px}
+.stat-bar .bar{flex:1;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;position:relative}
+.stat-bar .bar-fill{height:100%;border-radius:4px;transition:width .5s ease;position:relative}
+.stat-bar .bar-fill::after{content:attr(data-val);position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:9px;color:#fff;font-weight:600;white-space:nowrap;opacity:0;transition:opacity .2s}
+  .stat-bar .bar-fill:hover::after{opacity:1}
+  .stat-bar .bar-fill[style*="width:0"]::after,.stat-bar .bar-fill[style*="width: 0"]::after,.stat-bar .bar-fill[style*="width:1"]::after,.stat-bar .bar-fill[style*="width: 1"]::after,.stat-bar .bar-fill[style*="width:2"]::after,.stat-bar .bar-fill[style*="width: 2"]::after,.stat-bar .bar-fill[style*="width:3"]::after,.stat-bar .bar-fill[style*="width: 3"]::after,.stat-bar .bar-fill[style*="width:4"]::after,.stat-bar .bar-fill[style*="width: 4"]::after{display:none}
+.stat-bar .num{width:46px;text-align:right;font-size:12px;color:var(--text-dim);flex-shrink:0;white-space:nowrap}
+.fan-row{display:flex;gap:4px;flex-wrap:wrap;font-size:11px;margin-bottom:4px}
+.fan-tag{padding:2px 8px;border-radius:10px;background:rgba(168,85,247,0.15);color:var(--purple)}
+.team-card{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;margin-bottom:4px;
+  background:rgba(255,255,255,0.03);font-size:12px}
+.team-card .avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:14px;background:var(--gradient)}
+.team-card .info{flex:1}
+.team-card .name{font-weight:600;font-size:13px}
+.team-card .role{color:var(--text-dim);font-size:11px}
+.team-card .heart{color:var(--pink);font-size:11px}
+/* 右侧主区域 */
+#right-panel{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.tab-bar{display:flex;border-bottom:1px solid rgba(168,85,247,0.15);flex-shrink:0;background:rgba(13,11,26,0.5)}
+.tab-btn{flex:1;padding:10px 8px;font-size:12px;font-weight:600;color:var(--text-dim);
+  background:transparent;border-bottom:2px solid transparent;text-align:center;transition:all .2s}
+.tab-btn.active{color:var(--pink);border-bottom-color:var(--pink);background:rgba(255,110,180,0.05)}
+.tab-content{flex:1;overflow-y:auto;padding:16px}
+.tab-page{display:none}
+.tab-page.active{display:block}
+/* 行动按钮 */
+.action-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.action-card{padding:16px;border-radius:var(--radius);background:var(--bg-card);border:1px solid rgba(168,85,247,0.15);
+  cursor:pointer;transition:all .2s;text-align:center}
+.action-card:hover{border-color:var(--pink);box-shadow:0 0 20px rgba(255,110,180,0.15)}
+.action-card.disabled{opacity:.4;pointer-events:none}
+.action-card .icon{font-size:28px;margin-bottom:8px}
+.action-card .name{font-weight:600;font-size:14px;margin-bottom:4px}
+.action-card .desc{font-size:11px;color:var(--text-dim)}
+.action-card .cost{font-size:11px;color:var(--gold);margin-top:6px}
+/* 日志列表 */
+.log-list{display:flex;flex-direction:column;gap:6px}
+.log-item{padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.03);font-size:13px;
+  border-left:3px solid var(--purple);animation:fadeIn .3s ease}
+.log-item.good{border-left-color:var(--success)}
+.log-item.bad{border-left-color:var(--danger)}
+.log-item.special{border-left-color:var(--gold)}
+.log-item .day-tag{font-size:11px;color:var(--text-dim);margin-right:8px}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+/* SNS面板 */
+.sns-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px}
+.sns-card{padding:12px;border-radius:var(--radius);background:var(--bg-card);border:1px solid rgba(168,85,247,0.15);text-align:center}
+.sns-card .sns-name{font-weight:700;font-size:14px;margin-bottom:4px}
+.sns-card .sns-count{font-size:20px;font-weight:900;color:var(--gold)}
+.sns-card .sns-label{font-size:11px;color:var(--text-dim)}
+.sns-actions{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.sns-post-btn{padding:12px;border-radius:10px;background:var(--bg-card);border:1px solid rgba(168,85,247,0.2);
+  color:var(--text);font-size:13px;font-weight:500}
+/* 商店 */
+.shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.shop-item{padding:16px;border-radius:var(--radius);background:var(--bg-card);border:1px solid rgba(168,85,247,0.15);
+  text-align:center;cursor:pointer;transition:all .2s}
+.shop-item:hover{border-color:var(--gold);box-shadow:0 0 20px rgba(251,191,36,0.15)}
+.shop-item .item-icon{font-size:32px;margin-bottom:8px}
+.shop-item .item-name{font-weight:600;font-size:14px;margin-bottom:4px}
+.shop-item .item-desc{font-size:11px;color:var(--text-dim);margin-bottom:8px}
+.shop-item .item-price{font-weight:700;color:var(--gold);font-size:14px}
+/* 日程/阶段进度 */
+.schedule-item{padding:12px;border-radius:var(--radius);background:var(--bg-card);margin-bottom:8px;
+  border-left:3px solid var(--purple);display:flex;justify-content:space-between;align-items:center}
+.schedule-item.completed{border-left-color:var(--success);opacity:.6}
+.schedule-item.current{border-left-color:var(--gold);background:rgba(251,191,36,0.05)}
+/* 成就 */
+.ach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.ach-card{padding:10px 14px;border-radius:8px;background:var(--bg-card);border:1px solid rgba(168,85,247,0.15);
+  display:flex;align-items:center;gap:10px;font-size:13px;opacity:.4}
+.ach-card.unlocked{opacity:1;border-color:var(--gold);background:rgba(251,191,36,0.05)}
+.ach-card .ach-icon{font-size:22px}
+.ach-card .ach-name{font-weight:600}
+.ach-card .ach-desc{font-size:11px;color:var(--text-dim)}
+
+/* ==================== 模态框 ==================== */
+#modal-overlay{position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;
+  background:rgba(0,0,0,0.7);backdrop-filter:blur(4px)}
+.modal-box{background:var(--bg-card);border:1px solid rgba(168,85,247,0.3);border-radius:16px;
+  padding:28px;max-width:480px;width:90%;box-shadow:var(--shadow);animation:modalIn .3s ease}
+@keyframes modalIn{from{opacity:0;transform:scale(.9) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-title{font-size:18px;font-weight:700;margin-bottom:12px;background:var(--gradient-h);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.modal-body{font-size:14px;line-height:1.7;margin-bottom:20px;color:var(--text)}
+.modal-choices{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.modal-choice{padding:10px 16px;border-radius:10px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);
+  color:var(--text);font-size:13px;text-align:left;cursor:pointer;transition:all .2s}
+.modal-choice:hover{background:rgba(168,85,247,0.2);border-color:var(--pink)}
+.modal-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:12px 0;font-size:13px}
+.modal-stats .up{color:var(--success)}
+.modal-stats .down{color:var(--danger)}
+
+/* ==================== Toast通知 ==================== */
+#toast-container{position:fixed;top:60px;right:16px;z-index:300;display:flex;flex-direction:column;gap:8px}
+.toast{padding:12px 20px;border-radius:10px;background:var(--bg-card);border:1px solid rgba(168,85,247,0.3);
+  font-size:13px;box-shadow:var(--shadow);animation:toastIn .3s ease,toastOut .3s ease 2.7s forwards;max-width:300px}
+.toast.success{border-left:3px solid var(--success)}
+.toast.warning{border-left:3px solid var(--gold)}
+.toast.error{border-left:3px solid var(--danger)}
+.toast.info{border-left:3px solid var(--blue)}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateX(40px)}}
+
+/* ==================== 底部控制栏 ==================== */
+#bottom-bar{display:flex;justify-content:center;gap:12px;padding:10px;background:rgba(13,11,26,0.9);
+  border-top:1px solid rgba(168,85,247,0.15);flex-shrink:0}
+.ctrl-btn{padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600}
+.btn-rest{background:rgba(34,197,94,0.15);color:var(--success);border:1px solid rgba(34,197,94,0.3)}
+.btn-save{background:rgba(99,102,241,0.15);color:var(--blue);border:1px solid rgba(99,102,241,0.3)}
+.btn-load{background:rgba(168,85,247,0.15);color:var(--purple);border:1px solid rgba(168,85,247,0.3)}
+.btn-next-day{background:var(--gradient);color:#fff}
+
+/* ==================== 响应式 ==================== */
+@media(max-width:900px){
+  #main-content{flex-direction:column}
+  #left-panel{width:100%;max-height:200px;border-right:none;border-bottom:1px solid rgba(168,85,247,0.15);
+    display:flex;flex-wrap:nowrap;overflow-x:auto;gap:8px;padding:8px}
+  #left-panel .panel-section{min-width:200px;flex-shrink:0;margin-bottom:0}
+}
+@media(max-width:600px){
+  .form-grid{grid-template-columns:1fr}
+  .stat-preview{grid-template-columns:repeat(2,1fr)}
+  .action-grid{grid-template-columns:1fr}
+  .tab-btn{font-size:10px;padding:8px 4px}
+}
+</style>
+</head>
+<body>
+
+<!-- 星空背景 -->
+<div id="starfield"></div>
+
+<!-- 标题画面 -->
+<div id="title-screen">
+  <div class="title-logo">KPOP 爱豆模拟器</div>
+  <div class="title-sub">IDOL SIMULATOR</div>
+  <button class="title-btn" onclick="showCreate()">开始游戏</button>
+  <div class="title-ver">v1.0 | Made with Love</div>
+</div>
+
+<!-- 角色创建 -->
+<div id="create-screen">
+  <div class="create-card">
+    <h2>创建你的爱豆</h2>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>艺名</label>
+        <input id="c-stageName" placeholder="你的艺名">
+      </div>
+      <div class="form-group">
+        <label>本名</label>
+        <input id="c-realName" placeholder="真实姓名">
+      </div>
+      <div class="form-group">
+        <label>年龄</label>
+        <input id="c-age" type="number" min="14" max="28" value="18">
+      </div>
+      <div class="form-group">
+        <label>出身地区</label>
+        <select id="c-region">
+          <option>首尔</option><option>釜山</option><option>大邱</option><option>仁川</option>
+          <option>光州</option><option>大田</option><option>济州</option><option>中国</option>
+          <option>日本</option><option>泰国</option><option>美国</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>所属公司</label>
+        <select id="c-company">
+          <option value="SM">SM娱乐 - 大型资深经纪</option>
+          <option value="YG">YG娱乐 - 嘻哈潮流风格</option>
+          <option value="JYP">JYP娱乐 - 人才培训标杆</option>
+          <option value="HYBE">HYBE - 新时代娱乐帝国</option>
+          <option value="RBW">RBW娱乐 - 实力派团队</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>人设定位</label>
+        <select id="c-position">
+          <option value="vocal">主唱 Vocal</option>
+          <option value="dance">领舞 Dance</option>
+          <option value="visual">门面 Visual</option>
+          <option value="rapper">Rapper</option>
+          <option value="allround">全能 All-Rounder</option>
+        </select>
+      </div>
+    </div>
+    <div id="stat-preview" class="stat-preview"></div>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="randomCreate()">随机生成</button>
+      <button class="btn-primary" onclick="confirmCreate()">确认创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- 游戏主界面 -->
+<div id="game-screen">
+  <!-- 顶部HUD -->
+  <div id="hud">
+    <div class="hud-left">
+      <span id="hud-name">爱豆</span>
+      <span id="hud-badge" class="hud-badge">练习生</span>
+    </div>
+    <div class="hud-info">
+      <div class="hud-item"><span>Day</span><span class="val" id="hud-day">1</span></div>
+      <div class="hud-item"><span>体力</span><span class="val" id="hud-energy">80</span></div>
+      <div class="hud-item"><span>行动</span><span class="val" id="hud-actions">3/3</span></div>
+      <div class="hud-item"><span class="mood-icon" id="hud-mood">😊</span></div>
+      <div class="hud-item"><span>₩</span><span class="val" id="hud-money">50000</span></div>
+    </div>
+  </div>
+  <!-- 主内容 -->
+  <div id="main-content">
+    <!-- 左侧面板 -->
+    <div id="left-panel">
+      <div class="panel-section">
+        <div class="panel-title">实力属性</div>
+        <div id="stats-panel"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-title">状态属性</div>
+        <div id="status-panel"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-title">粉丝构成</div>
+        <div id="fans-panel"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-title">SNS粉丝</div>
+        <div id="sns-mini-panel"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-title">团队成员</div>
+        <div id="team-panel"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-title">成就 <span id="ach-count">0/0</span></div>
+        <div id="ach-mini-panel"></div>
+      </div>
+    </div>
+    <!-- 右侧主区域 -->
+    <div id="right-panel">
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="actions" onclick="switchTab('actions')">行动</button>
+        <button class="tab-btn" data-tab="sns" onclick="switchTab('sns')">SNS</button>
+        <button class="tab-btn" data-tab="shop" onclick="switchTab('shop')">商店</button>
+        <button class="tab-btn" data-tab="log" onclick="switchTab('log')">日志</button>
+        <button class="tab-btn" data-tab="ach" onclick="switchTab('ach')">成就</button>
+      </div>
+      <div class="tab-content">
+        <div id="tab-actions" class="tab-page active">
+          <div id="actions-container" class="action-grid"></div>
+        </div>
+        <div id="tab-sns" class="tab-page">
+          <div id="sns-container"></div>
+        </div>
+        <div id="tab-shop" class="tab-page">
+          <div id="shop-container" class="shop-grid"></div>
+        </div>
+        <div id="tab-log" class="tab-page">
+          <div id="log-container" class="log-list"></div>
+        </div>
+        <div id="tab-ach" class="tab-page">
+          <div id="ach-container" class="ach-grid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- 底部控制栏 -->
+  <div id="bottom-bar">
+    <button class="ctrl-btn btn-rest" onclick="doRest()">休息 (+体力)</button>
+    <button class="ctrl-btn btn-next-day" onclick="doNextDay()">进入下一天</button>
+    <button class="ctrl-btn btn-save" onclick="saveGame()">存档</button>
+    <button class="ctrl-btn btn-load" onclick="loadGame()">读档</button>
+  </div>
+</div>
+
+<!-- 模态框 -->
+<div id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div id="modal-title" class="modal-title"></div>
+    <div id="modal-body" class="modal-body"></div>
+    <div id="modal-choices" class="modal-choices"></div>
+    <div id="modal-footer" style="text-align:center"></div>
+  </div>
+</div>
+
+<!-- Toast容器 -->
+<div id="toast-container"></div>
+
+<script>
+// ==================== 星空背景生成 ====================
+(function createStars(){
+  const sf=document.getElementById('starfield');
+  for(let i=0;i<120;i++){
+    const s=document.createElement('div');
+    s.className='star';
+    s.style.left=Math.random()*100+'%';
+    s.style.top=Math.random()*100+'%';
+    s.style.setProperty('--d',(1+Math.random()*3)+'s');
+    s.style.animationDelay=Math.random()*3+'s';
+    if(Math.random()>.7)s.style.width=s.style.height='3px';
+    sf.appendChild(s);
+  }
+  for(let i=0;i<3;i++){
+    const ss=document.createElement('div');
+    ss.className='shooting-star';
+    ss.style.left=Math.random()*60+'%';
+    ss.style.top=Math.random()*40+'%';
+    ss.style.animationDelay=i*4+'s';
+    sf.appendChild(ss);
+  }
+})();
+
+// ==================== 游戏数据 ==================== */
+const COMPANIES={
+  SM:{name:'SM娱乐',color:'#ff6eb4',desc:'大型资深经纪公司'},
+  YG:{name:'YG娱乐',color:'#a855f7',desc:'嘻哈潮流风格'},
+  JYP:{name:'JYP娱乐',color:'#6366f1',desc:'人才培训标杆'},
+  HYBE:{name:'HYBE',color:'#22d3ee',desc:'新时代娱乐帝国'},
+  RBW:{name:'RBW娱乐',color:'#fbbf24',desc:'实力派团队'}
+};
+const POSITIONS={vocal:'主唱',dance:'领舞',visual:'门面',rapper:'Rapper',allround:'全能'};
+const MOODS=[['😍','超开心'],['😊','开心'],['😐','一般'],['😔','低落'],['😢','难过']];
+const STAT_COLORS={vocal:'linear-gradient(90deg,#ff6eb4,#ff3385)',dance:'linear-gradient(90deg,#a855f7,#7c3aed)',
+  rap:'linear-gradient(90deg,#22d3ee,#0891b2)',visual:'linear-gradient(90deg,#fbbf24,#f59e0b)',
+  variety:'linear-gradient(90deg,#22c55e,#16a34a)',acting:'linear-gradient(90deg,#f97316,#ea580c)'};
+
+// 随机名字池
+const SURNAMES=['金','李','朴','崔','郑','姜','黄','赵','吴','周','孙','安','宋','韩','柳','田','林','徐','车','方'];
+const GIVEN_NAMES=['秀妍','智雅','恩熙','敏智','多恩','海彬','瑞允','书贤','彩元','佳允','夏恩','秀真','惠利','贞雅','允熙','泰熙','美善','秀晶','雪莉','恩秀','可盈','梓涵','若曦','思琪','诗涵','雅琳','慧珍','娜恩','宥真','荷娜'];
+const TEAM_NAMES=['慧珍','敏智','秀妍','多恩','海彬','瑞允','智雅','彩元','佳允','夏恩','恩熙','书贤','惠利','贞雅','娜恩','宥真','荷娜','诗涵','雅琳','若曦','可盈','梓涵','美善','秀晶','雪莉','恩秀'];
+const POSITIONS_LIST=['vocal','dance','visual','rapper','allround'];
+
+// NPC好感度表情
+function heartLevel(v){return v>=80?'❤️❤️❤️':v>=50?'❤️❤️':v>=25?'❤️':'🤍'}
+
+// ==================== 游戏状态 ==================== */
+let G={}; // 全局游戏状态
+
+function initGameState(charData){
+  const pos=charData.position;
+  // 根据定位生成初始属性
+  const baseStats={vocal:15,dance:15,rap:15,visual:20,variety:10,acting:10};
+  if(pos==='vocal'){baseStats.vocal=35;baseStats.acting=18}
+  if(pos==='dance'){baseStats.dance=35;baseStats.variety=15}
+  if(pos==='visual'){baseStats.visual=35;baseStats.variety=18}
+  if(pos==='rapper'){baseStats.rap=35;baseStats.dance=20}
+  if(pos==='allround'){baseStats.vocal=25;baseStats.dance=25;baseStats.visual=22;baseStats.variety=15}
+
+  // 随机NPC队友
+  const teammates=[];
+  const usedNames=[];
+  for(let i=0;i<6;i++){
+    let nm;do{nm=TEAM_NAMES[Math.floor(Math.random()*TEAM_NAMES.length)]}while(usedNames.includes(nm));
+    usedNames.push(nm);
+    teammates.push({
+      name:nm,
+      position:POSITIONS_LIST[Math.floor(Math.random()*POSITIONS_LIST.length)],
+      affinity:Math.floor(Math.random()*20),
+      trait:['认真','活泼','内向','搞笑','温柔','酷飒'][Math.floor(Math.random()*6)]
+    });
+  }
+
+  G={
+    phase:'trainee', // trainee | debut_prep | active
+    day:1,
+    char:{...charData},
+    stats:{...baseStats, vocalStamina:20,danceStamina:20,songwriting:5,composing:5,charm:15},
+    status:{energy:80,mood:60,money:50000,fans:0,trending:0,image:10,brandValue:0,companySat:50},
+    fans:{group:0, solo:0, cp:0, anti:0, overseas:0},
+    sns:{instagram:0,twitter:0,youtube:0,weverse:0},
+    teammates,
+    actions:3,maxActions:3,
+    logs:[],
+    achievements:{},
+    romance:null,
+    debutScore:0,
+    totalEarnings:0,
+    snsUsed:false,
+    shopUsed:false,
+    lessonsTaken:{vocal:0,dance:0,rap:0,variety:0,acting:0,composition:0},
+    concertCount:0,
+    comebackCount:0,
+    mvCount:0,
+    awardCount:0,
+    cfCount:0
+  };
+  updateStatPreview();
+}
+
+// ==================== 标题与创建 ==================== */
+function showCreate(){
+  document.getElementById('title-screen').style.display='none';
+  document.getElementById('create-screen').style.display='flex';
+  randomCreate();
+}
+
+function randomCreate(){
+  const sn=SURNAMES[Math.floor(Math.random()*SURNAMES.length)]+GIVEN_NAMES[Math.floor(Math.random()*GIVEN_NAMES.length)];
+  const rn=SURNAMES[Math.floor(Math.random()*SURNAMES.length)]+GIVEN_NAMES[Math.floor(Math.random()*GIVEN_NAMES.length)];
+  document.getElementById('c-stageName').value=sn;
+  document.getElementById('c-realName').value=rn;
+  document.getElementById('c-age').value=15+Math.floor(Math.random()*10);
+  const regions=['首尔','釜山','大邱','仁川','光州','中国','日本','泰国','美国'];
+  document.getElementById('c-region').value=regions[Math.floor(Math.random()*regions.length)];
+  const companies=['SM','YG','JYP','HYBE','RBW'];
+  document.getElementById('c-company').value=companies[Math.floor(Math.random()*companies.length)];
+  const positions=['vocal','dance','visual','rapper','allround'];
+  document.getElementById('c-position').value=positions[Math.floor(Math.random()*positions.length)];
+  updateStatPreview();
+}
+
+function updateStatPreview(){
+  const pos=document.getElementById('c-position').value;
+  const s={vocal:15,dance:15,rap:15,visual:20,variety:10,acting:10};
+  if(pos==='vocal'){s.vocal=35;s.acting=18}
+  if(pos==='dance'){s.dance=35;s.variety=15}
+  if(pos==='visual'){s.visual=35;s.variety=18}
+  if(pos==='rapper'){s.rap=35;s.dance=20}
+  if(pos==='allround'){s.vocal=25;s.dance=25;s.visual=22;s.variety=15}
+  const names={vocal:'声乐',dance:'舞蹈',rap:'说唱',visual:'外貌',variety:'综艺',acting:'演技'};
+  let html='';
+  for(let k in s) html+=`<div><span>${names[k]}</span> <strong>${s[k]}</strong></div>`;
+  document.getElementById('stat-preview').innerHTML=html;
+}
+document.getElementById('c-position').addEventListener('change',updateStatPreview);
+
+function confirmCreate(){
+  const stageName=document.getElementById('c-stageName').value.trim();
+  const realName=document.getElementById('c-realName').value.trim();
+  if(!stageName||!realName){toast('请填写艺名和本名','warning');return}
+  const charData={
+    stageName,realName,
+    age:parseInt(document.getElementById('c-age').value)||18,
+    region:document.getElementById('c-region').value,
+    company:document.getElementById('c-company').value,
+    position:document.getElementById('c-position').value
+  };
+  initGameState(charData);
+  document.getElementById('create-screen').style.display='none';
+  document.getElementById('game-screen').style.display='flex';
+  addLog('welcome',`${stageName}，欢迎来到${COMPANIES[charData.company].name}！你的练习生生涯开始了。`);
+  refreshAll();
+}
+
+// ==================== 渲染系统 ==================== */
+function refreshAll(){
+  renderHUD();
+  renderLeftPanel();
+  renderActions();
+  renderSNS();
+  renderShop();
+  renderLog();
+  renderAchievements();
+  checkAchievements();
+}
+
+function renderHUD(){
+  document.getElementById('hud-name').textContent=G.char.stageName;
+  const phaseNames={trainee:'练习生',debut_prep:'出道准备',active:'活跃期'};
+  document.getElementById('hud-badge').textContent=phaseNames[G.phase]||G.phase;
+  document.getElementById('hud-day').textContent=G.day;
+  document.getElementById('hud-energy').textContent=G.status.energy;
+  document.getElementById('hud-actions').textContent=G.actions+'/'+G.maxActions;
+  document.getElementById('hud-money').textContent=formatMoney(G.status.money);
+  // 心情
+  let mi=0;
+  if(G.status.mood>=80)mi=0;else if(G.status.mood>=60)mi=1;else if(G.status.mood>=40)mi=2;
+  else if(G.status.mood>=20)mi=3;else mi=4;
+  document.getElementById('hud-mood').textContent=MOODS[mi][0];
+}
+
+function renderLeftPanel(){
+  // 实力属性
+  const statNames={vocal:'声乐',dance:'舞蹈',rap:'说唱',visual:'外貌',variety:'综艺',acting:'演技',
+    vocalStamina:'声乐耐力',danceStamina:'舞蹈耐力',songwriting:'作词',composing:'作曲',charm:'魅力'};
+  let sh='';
+  for(let k in statNames){
+    if(k==='charm')break; // 先显示主要属性
+    const v=G.stats[k]||0;
+    const max=k.includes('Stamina')||k==='songwriting'||k==='composing'?100:100;
+    const color=STAT_COLORS[k]||'var(--gradient)';
+    sh+=`<div class="stat-bar"><span class="label">${statNames[k]}</span>
+      <div class="bar"><div class="bar-fill" style="width:${Math.min(v/max*100,100)}%;background:${color}" data-val="${v}"></div></div>
+      <span class="num">${v}</span></div>`;
+  }
+  document.getElementById('stats-panel').innerHTML=sh;
+  // 状态属性
+  const stNames={energy:'体力',mood:'心情',fans:'粉丝',trending:'话题度',image:'形象',brandValue:'品牌',companySat:'公司满意度'};
+  let sth='';
+  for(let k in stNames){
+    const v=G.status[k]||0;
+    const max=k==='fans'?999999:k==='energy'?100:100;
+    const pct=Math.min(v/max*100,100);
+    let color='var(--gradient)';
+    if(k==='energy')color='linear-gradient(90deg,#22c55e,#16a34a)';
+    if(k==='mood')color='linear-gradient(90deg,#fbbf24,#f59e0b)';
+    if(k==='companySat')color='linear-gradient(90deg,#6366f1,#4f46e5)';
+    const dispVal = k==='fans'?formatFans(v):v;
+    sth+=`<div class="stat-bar"><span class="label">${stNames[k]}</span>
+      <div class="bar"><div class="bar-fill" style="width:${pct}%;background:${color}" data-val="${dispVal}"></div></div>
+      <span class="num">${dispVal}</span></div>`;
+  }
+  document.getElementById('status-panel').innerHTML=sth;
+  // 粉丝
+  const fNames={group:'团粉',solo:'唯粉',cp:'CP粉',anti:'黑粉',overseas:'海外粉'};
+  let fh='';
+  for(let k in fNames){
+    const c=G.fans[k]||0;
+    const col=k==='anti'?'var(--danger)':'var(--purple)';
+    fh+=`<div class="fan-tag" style="border:1px solid ${col}">${fNames[k]}: ${formatFans(c)}</div>`;
+  }
+  document.getElementById('fans-panel').innerHTML=`<div class="fan-row">${fh}</div>`;
+  // SNS mini
+  const snsNames={instagram:'IG',twitter:'X',youtube:'YT',weverse:'WV'};
+  let smh='';
+  for(let k in snsNames){
+    const snsVal=formatFans(G.sns[k]);
+    smh+=`<div class="stat-bar"><span class="label">${snsNames[k]}</span>
+      <div class="bar"><div class="bar-fill" style="width:${Math.min(Math.sqrt(G.sns[k])*0.5,100)}%;background:var(--gradient)" data-val="${snsVal}"></div></div>
+      <span class="num">${snsVal}</span></div>`;
+  }
+  document.getElementById('sns-mini-panel').innerHTML=smh;
+  // 队友
+  let th='';
+  G.teammates.forEach(t=>{
+    th+=`<div class="team-card">
+      <div class="avatar">${t.name[0]}</div>
+      <div class="info"><div class="name">${t.name}</div>
+      <div class="role">${POSITIONS[t.position]} · ${t.trait}</div></div>
+      <div class="heart">${heartLevel(t.affinity)}</div></div>`;
+  });
+  document.getElementById('team-panel').innerHTML=th;
+  // 成就mini
+  const achKeys=Object.keys(ACHIEVEMENTS);
+  const unlocked=achKeys.filter(k=>G.achievements[k]).length;
+  document.getElementById('ach-count').textContent=`${unlocked}/${achKeys.length}`;
+}
+
+function renderActions(){
+  const c=document.getElementById('actions-container');
+  let html='';
+  const energyOk=G.status.energy>=15;
+  const actionOk=G.actions>0;
+  const disabled=!actionOk;
+
+  if(G.phase==='trainee'){
+    html+=actionCard('🎤','声乐训练','声乐+3~5, 声乐耐力+2',disabled||!energyOk,'train_vocal');
+    html+=actionCard('💃','舞蹈训练','舞蹈+3~5, 舞蹈耐力+2',disabled||!energyOk,'train_dance');
+    html+=actionCard('🎧','说唱训练','说唱+3~5, 舞蹈+1',disabled||!energyOk,'train_rap');
+    html+=actionCard('😂','综艺练习','综艺感+3~5, 魅力+2',disabled||!energyOk,'train_variety');
+    html+=actionCard('✍️','创作学习','作词+3, 作曲+3',disabled||!energyOk,'train_compose');
+    html+=actionCard('💼','打工兼职','金钱+15000~25000, 体力-20',disabled,'work');
+    html+=actionCard('🤝','社交聚会','队友好感+5~10, 心情+5',disabled,'social');
+    html+=actionCard('🎬','出道考核','综合评分需60+才能通过！',G.debutScore>=60||G.day<7,'debut_exam');
+    html+=`<div class="action-card" style="cursor:default"><div class="icon">📊</div><div class="name">出道评分: ${G.debutScore}</div><div class="desc">声+舞+说+综艺+作/3 (需60+)</div></div>`;
+  } else if(G.phase==='debut_prep'){
+    html+=actionCard('👥','团体合练','团体默契提升, 综艺+2',disabled||!energyOk,'team_train');
+    html+=actionCard('🎥','MV拍摄','形象+5, 话题度+3, 体力-20',disabled||!energyOk,'mv_shoot');
+    html+=actionCard('📺','综艺录制','综艺感+3, 话题度+5, 心情-5',disabled||!energyOk,'variety_show');
+    html+=actionCard('🌟','出道舞台！','最终出道！需要总评70+',G.day<10,'debut_stage');
+  } else if(G.phase==='active'){
+    html+=actionCard('🎵','回归准备','选择概念, 准备新曲',disabled,'comeback');
+    html+=actionCard('📺','综艺活动','综艺感+2, 话题度+3~5',disabled||!energyOk,'active_variety');
+    html+=actionCard('✍️','粉丝签售','唯粉+200, 心情+10, 体力-15',disabled||!energyOk,'fansign');
+    html+=actionCard('🎤','演唱会','粉丝+5000, 金钱+10万, 体力-30',disabled||!energyOk,'concert');
+    html+=actionCard('🏆','颁奖典礼','品牌价值+10, 形象+5',disabled,'award');
+    html+=actionCard('📷','广告拍摄','金钱+20万, 形象+3, 体力-15',disabled||!energyOk,'cf');
+    html+=actionCard('📱','私下聚会','随机触发恋爱事件！',disabled||!energyOk,'private_meet');
+    html+=actionCard('💪','自我提升','选择一项属性训练+2~3',disabled||!energyOk,'self_train');
+  }
+  c.innerHTML=html;
+}
+
+function actionCard(icon,name,desc,disabled,id){
+  return `<div class="action-card${disabled?' disabled':''}" ${id?`onclick="doAction('${id}')"`:''}>
+    <div class="icon">${icon}</div><div class="name">${name}</div><div class="desc">${desc}</div></div>`;
+}
+
+function renderSNS(){
+  const snsInfo={instagram:{name:'Instagram',icon:'📸'},twitter:{name:'Twitter/X',icon:'🐦'},
+    youtube:{name:'YouTube',icon:'▶️'},weverse:{name:'Weverse',icon:'💜'}};
+  let sh=`<div class="sns-grid">`;
+  for(let k in snsInfo){
+    sh+=`<div class="sns-card"><div class="sns-name">${snsInfo[k].icon} ${snsInfo[k].name}</div>
+      <div class="sns-count">${formatFans(G.sns[k])}</div><div class="sns-label">粉丝</div></div>`;
+  }
+  sh+=`</div><div class="sns-actions">`;
+  if(!G.snsUsed){
+    sh+=snsPostBtn('📸','自拍更新','外貌+1, IG粉丝+',100,'selfie');
+    sh+=snsPostBtn('🎤','翻唱/舞蹈','声乐或舞蹈+1, YT+',100,'cover');
+    sh+=snsPostBtn('💬','日常分享','心情+3, Twitter+',80,'daily');
+    sh+=snsPostBtn('💜','粉丝互动','粉丝+100, Weverse+',80,'interact');
+  } else {
+    sh+=`<div style="grid-column:1/-1;text-align:center;color:var(--text-dim);padding:20px">今天已经发过帖子了</div>`;
+  }
+  sh+=`</div>`;
+  document.getElementById('sns-container').innerHTML=sh;
+}
+
+function snsPostBtn(icon,name,desc,cost,id){
+  return `<button class="sns-post-btn" onclick="doSNS('${id}')">
+    <div style="font-size:20px;margin-bottom:4px">${icon}</div>${name}<br><span style="font-size:11px;color:var(--text-dim)">${desc}</span></button>`;
+}
+
+function renderShop(){
+  const items=[
+    {id:'skincare',icon:'🧴',name:'高级护肤品',desc:'外貌+3',price:20000,stat:'visual',val:3},
+    {id:'vocal_lesson',icon:'📚',name:'声乐大师课',desc:'声乐+5',price:50000,stat:'vocal',val:5},
+    {id:'dance_lesson',icon:'👟',name:'舞蹈特训班',desc:'舞蹈+5',price:50000,stat:'dance',val:5},
+    {id:'rap_lesson',icon:'🎤',name:'说唱工作坊',desc:'说唱+5',price:40000,stat:'rap',val:5},
+    {id:'gift_set',icon:'🎁',name:'礼物套装',desc:'队友好感+15',price:15000,stat:'gift',val:15},
+    {id:'energy_drink',icon:'⚡',name:'能量饮料',desc:'体力+30',price:10000,stat:'energy',val:30},
+    {id:'mood_cake',icon:'🍰',name:'治愈蛋糕',desc:'心情+15',price:8000,stat:'mood',val:15},
+    {id:'charm_book',icon:'📖',name:'魅力提升书',desc:'魅力+4',price:30000,stat:'charm',val:4}
+  ];
+  let sh='';
+  items.forEach(it=>{
+    const canBuy=G.status.money>=it.price&&!G.shopUsed;
+    sh+=`<div class="shop-item${canBuy?'':'" style="opacity:.4;pointer-events:none"'} onclick="buyItem('${it.id}')">
+      <div class="item-icon">${it.icon}</div><div class="item-name">${it.name}</div>
+      <div class="item-desc">${it.desc}</div><div class="item-price">₩${formatMoney(it.price)}</div></div>`;
+  });
+  if(G.shopUsed) sh=`<div style="grid-column:1/-1;text-align:center;color:var(--text-dim);padding:20px">今天已经购买过了</div>`+sh;
+  document.getElementById('shop-container').innerHTML=sh;
+  // 保存商店数据供购买使用
+  window._shopItems=items;
+}
+
+function renderLog(){
+  const c=document.getElementById('log-container');
+  if(G.logs.length===0){c.innerHTML='<div style="text-align:center;color:var(--text-dim);padding:40px">暂无日志</div>';return}
+  let h='';
+  const logs=G.logs.slice(-50).reverse();
+  logs.forEach(l=>{
+    const cls=l.type==='good'?'good':l.type==='bad'?'bad':l.type==='special'?'special':'';
+    h+=`<div class="log-item ${cls}"><span class="day-tag">Day ${l.day}</span>${l.text}</div>`;
+  });
+  c.innerHTML=h;
+}
+
+// ==================== 成就系统 ==================== */
+const ACHIEVEMENTS={
+  debut_star:{name:'出道之星',desc:'成功出道',icon:'⭐'},
+  vocal_queen:{name:'声乐女王',desc:'声乐达到80',icon:'🎤'},
+  dance_machine:{name:'舞蹈机器',desc:'舞蹈达到80',icon:'💃'},
+  variety_king:{name:'综艺之星',desc:'综艺感达到70',icon:'😂'},
+  sns_star:{name:'SNS女王',desc:'任意SNS粉丝超过100万',icon:'📱'},
+  pak:{name:'PAK达成',desc:'回归时所有榜单1位',icon:'🏆'},
+  daesang:{name:'大赏获得者',desc:'获得大赏',icon:'👑'},
+  million_fan:{name:'百万粉丝',desc:'总粉丝超过100万',icon:'💎'},
+  billionaire:{name:'亿元富翁',desc:'累计收入超过1亿韩元',icon:'💰'},
+  cf_queen:{name:'广告女王',desc:'拍摄5支广告',icon:'📷'},
+  concert_queen:{name:'演唱会女王',desc:'举办5场演唱会',icon:'🎉'},
+  love_found:{name:'恋爱发现',desc:'触发恋爱事件',icon:'💕'},
+  trainee_grand:{name:'练习生优秀毕业',desc:'出道考核85+',icon:'🎓'},
+  all_rounder:{name:'全能天才',desc:'所有实力属性超过60',icon:'🌟'}
+};
+
+function renderAchievements(){
+  let h='';
+  for(let k in ACHIEVEMENTS){
+    const a=ACHIEVEMENTS[k];
+    const unlocked=G.achievements[k];
+    h+=`<div class="ach-card${unlocked?' unlocked':''}">
+      <div class="ach-icon">${unlocked?a.icon:'🔒'}</div>
+      <div><div class="ach-name">${a.name}</div><div class="ach-desc">${a.desc}</div></div></div>`;
+  }
+  document.getElementById('ach-container').innerHTML=h;
+}
+
+function checkAchievements(){
+  const totalFans=G.fans.group+G.fans.solo+G.fans.cp+G.fans.overseas;
+  const checks={
+    million_fan:totalFans>=1000000,
+    billionaire:G.totalEarnings>=100000000,
+    cf_queen:G.cfCount>=5,
+    concert_queen:G.concertCount>=5,
+    vocal_queen:G.stats.vocal>=80,
+    dance_machine:G.stats.dance>=80,
+    variety_king:G.stats.variety>=70,
+    sns_star:Object.values(G.sns).some(v=>v>=1000000),
+    all_rounder:G.stats.vocal>=60&&G.stats.dance>=60&&G.stats.rap>=60&&G.stats.visual>=60&&G.stats.variety>=60
+  };
+  for(let k in checks){
+    if(checks[k]&&!G.achievements[k]){
+      G.achievements[k]=true;
+      toast(`成就解锁：${ACHIEVEMENTS[k].icon} ${ACHIEVEMENTS[k].name}！`,'success');
+      addLog('special',`🏆 解锁成就「${ACHIEVEMENTS[k].name}」！`);
+    }
+  }
+}
+
+// ==================== 行动系统 ==================== */
+function doAction(id){
+  if(G.actions<=0){toast('今日行动次数已用完，请休息或进入下一天','warning');return}
+  const energyCost=15;
+  if(G.status.energy<energyCost&&(id!=='work'&&id!=='social')){toast('体力不足！请先休息','warning');return}
+
+  switch(id){
+    case 'train_vocal': doTrain('vocal',3,5,{vocalStamina:2}); break;
+    case 'train_dance': doTrain('dance',3,5,{danceStamina:2}); break;
+    case 'train_rap': doTrain('rap',3,5,{dance:1}); break;
+    case 'train_variety': doTrain('variety',3,5,{charm:2}); break;
+    case 'train_compose': doTrain('compose',0,0,{songwriting:3,composing:3}); break;
+    case 'work': doWork(); break;
+    case 'social': doSocial(); break;
+    case 'debut_exam': doDebutExam(); break;
+    case 'team_train': doTeamTrain(); break;
+    case 'mv_shoot': doMVShoot(); break;
+    case 'variety_show': doVarietyShow(); break;
+    case 'debut_stage': doDebutStage(); break;
+    case 'comeback': doComeback(); break;
+    case 'active_variety': doActiveVariety(); break;
+    case 'fansign': doFanSign(); break;
+    case 'concert': doConcert(); break;
+    case 'award': doAward(); break;
+    case 'cf': doCF(); break;
+    case 'private_meet': doPrivateMeet(); break;
+    case 'self_train': doSelfTrain(); break;
+  }
+}
+
+function doTrain(stat,min,max,extra){
+  const gain=randInt(min,max);
+  G.stats[stat]=clamp(G.stats[stat]+gain,0,100);
+  G.status.energy-=15;
+  G.actions--;
+  G.lessonsTaken[stat]=(G.lessonsTaken[stat]||0)+1;
+  const statName={vocal:'声乐',dance:'舞蹈',rap:'说唱',variety:'综艺'}[stat]||stat;
+  let logText=`训练了${statName}，${statName}+${gain}`;
+  for(let k in extra){
+    if(G.stats[k]!==undefined) G.stats[k]=clamp(G.stats[k]+extra[k],0,100);
+    const ek={vocalStamina:'声乐耐力',danceStamina:'舞蹈耐力',charm:'魅力',dance:'舞蹈'}[k]||k;
+    logText+=`，${ek}+${extra[k]}`;
+  }
+  addLog('good',logText);
+  toast(`${statName}+${gain}！训练辛苦了~`,'success');
+  triggerRandomEvent('train');
+  refreshAll();
+}
+
+function doWork(){
+  const earn=randInt(15000,25000);
+  G.status.money+=earn;
+  G.status.energy-=20;
+  G.actions--;
+  addLog('good',`打工赚取了 ₩${formatMoney(earn)}`);
+  toast(`赚了 ₩${formatMoney(earn)}！`,'info');
+  triggerRandomEvent('work');
+  refreshAll();
+}
+
+function doSocial(){
+  G.actions--;
+  G.status.mood=clamp(G.status.mood+5,0,100);
+  let logText='参加社交聚会：';
+  G.teammates.forEach(t=>{
+    const gain=randInt(5,10);
+    t.affinity=clamp(t.affinity+gain,0,100);
+    logText+=`${t.name}好感+${gain} `;
+  });
+  addLog('good',logText);
+  toast('社交愉快，和队友们的关系更近了！','success');
+  triggerRandomEvent('social');
+  refreshAll();
+}
+
+function doDebutExam(){
+  const s=G.stats;
+  G.debutScore=Math.floor((s.vocal+s.dance+s.rap+s.variety+Math.max(s.songwriting,s.composing))/4);
+  const pass=G.debutScore>=60;
+  showModal('🎬 出道考核',
+    `你的综合评分：${G.debutScore}<br><br>`+
+    `声乐 ${s.vocal} | 舞蹈 ${s.dance} | 说唱 ${s.rap}<br>`+
+    `综艺 ${s.variety} | 创作 ${Math.max(s.songwriting,s.composing)}<br><br>`+
+    (pass?'🎉 恭喜通过！你可以进入出道准备阶段了！':'❌ 未通过考核... 继续努力训练吧！'),
+    pass?[{text:'进入出道准备',action:()=>{G.phase='debut_prep';G.day=1;G.actions=3;closeModalDirect();
+      addLog('special','通过出道考核！进入出道准备阶段！');
+      if(G.debutScore>=85)unlock('trainee_grand');
+      refreshAll();toast('进入出道准备阶段！','success');}},
+      {text:'继续训练',action:closeModalDirect}]:[{text:'继续努力',action:closeModalDirect}]);
+}
+
+function doTeamTrain(){
+  G.stats.variety=clamp(G.stats.variety+2,0,100);
+  G.status.energy-=15;G.actions--;
+  G.teammates.forEach(t=>{t.affinity=clamp(t.affinity+2,0,100)});
+  addLog('good','进行了团体合练，团队默契提升！');
+  toast('团队合练完成！','success');
+  triggerRandomEvent('train');refreshAll();
+}
+
+function doMVShoot(){
+  G.status.image=clamp(G.status.image+5,0,100);
+  G.status.trending=clamp(G.status.trending+3,0,100);
+  G.status.energy-=20;G.actions--;G.mvCount++;
+  G.sns.instagram+=randInt(500,2000);
+  addLog('good','MV拍摄完成！形象和话题度大幅提升！');
+  toast('MV拍摄完成！视觉效果超棒~','success');
+  triggerRandomEvent('work');refreshAll();
+}
+
+function doVarietyShow(){
+  G.stats.variety=clamp(G.stats.variety+3,0,100);
+  G.status.trending=clamp(G.status.trending+randInt(3,5),0,100);
+  G.status.mood=clamp(G.status.mood-5,0,100);
+  G.status.energy-=15;G.actions--;
+  G.sns.twitter+=randInt(200,800);
+  addLog('good','综艺录制完成，增加了不少曝光！');
+  toast('综艺录制完成！','success');
+  triggerRandomEvent('social');refreshAll();
+}
+
+function doDebutStage(){
+  const total=G.stats.vocal+G.stats.dance+G.stats.rap+G.stats.visual+G.stats.variety+G.status.image;
+  const score=Math.floor(total/6);
+  const pass=score>=70;
+  showModal('🌟 出道舞台',
+    `你的出道综合评分：${score}<br><br>`+
+    `实力评估 + 外在形象 = 最终分数<br><br>`+
+    (pass?'🎉 出道成功！你正式成为KPOP爱豆了！全新的活跃期开始了！':'❌ 出道评分不足... 公司决定延期出道。'),
+    pass?[{text:'开启活跃期！',action:()=>{
+      G.phase='active';G.day=1;G.actions=3;G.status.fans=randInt(500,2000);
+      G.fans.group=G.status.fans;G.fans.overseas=randInt(50,200);
+      G.achievements.debut_star=true;
+      addLog('special','🌟 出道成功！正式成为KPOP爱豆！');
+      toast('出道成功！恭喜你成为KPOP爱豆！🎉','success');
+      closeModalDirect();refreshAll();
+    }}]:[{text:'继续准备',action:closeModalDirect}]);
+}
+
+function doComeback(){
+  const concepts=['Girl Crush','可爱清纯','复古概念','暗黑概念','夏日清凉','嘻哈街头'];
+  showModal('🎵 回归准备','选择本次回归的概念：',
+    concepts.map(c=>({text:c,action:()=>{
+      G.comebackCount++;G.actions--;
+      G.status.trending=clamp(G.status.trending+10,0,100);
+      G.sns.youtube+=randInt(5000,20000);
+      G.sns.instagram+=randInt(3000,10000);
+      const fansGain=randInt(5000,20000);
+      G.fans.group+=fansGain;G.fans.overseas+=randInt(500,3000);
+      G.status.brandValue=clamp(G.status.brandValue+5,0,100);
+      addLog('special',`回归成功！「${c}」概念获得大量关注！新增粉丝${formatFans(fansGain)}`);
+      toast(`「${c}」回归大成功！🎉`,'success');
+      // PAK chance
+      if(G.stats.vocal>=60&&G.stats.dance>=60&&G.status.image>=50&&Math.random()>.6){
+        G.achievements.pak=true;
+        addLog('special','🏆 达成PAK！所有榜单1位！');
+        toast('🏆 PAK达成！所有榜单1位！','success');
+      }
+      closeModalDirect();refreshAll();
+    }})));
+}
+
+function doActiveVariety(){
+  G.stats.variety=clamp(G.stats.variety+2,0,100);
+  const trend=randInt(3,5);
+  G.status.trending=clamp(G.status.trending+trend,0,100);
+  G.status.energy-=15;G.actions--;
+  G.sns.twitter+=randInt(500,2000);
+  addLog('good',`综艺活动结束，话题度+${trend}`);
+  toast('综艺活动完成！','success');refreshAll();
+}
+
+function doFanSign(){
+  G.fans.solo+=200;G.status.mood=clamp(G.status.mood+10,0,100);
+  G.status.energy-=15;G.actions--;
+  G.sns.weverse+=randInt(200,500);
+  G.status.companySat=clamp(G.status.companySat+2,0,100);
+  addLog('good','粉丝签售会圆满结束！');
+  toast('粉丝们好热情呀~','success');refreshAll();
+}
+
+function doConcert(){
+  const fansGain=randInt(3000,8000);
+  const earn=randInt(80000,150000);
+  G.fans.group+=fansGain;G.status.money+=earn;G.totalEarnings+=earn;
+  G.status.energy-=30;G.actions--;G.concertCount++;
+  G.sns.youtube+=randInt(5000,15000);
+  addLog('good',`演唱会成功！新增粉丝${formatFans(fansGain)}，收入₩${formatMoney(earn)}`);
+  toast('演唱会圆满成功！🎉','success');refreshAll();
+}
+
+function doAward(){
+  G.actions--;
+  if(G.status.brandValue>=50&&Math.random()>.4){
+    G.awardCount++;G.status.brandValue=clamp(G.status.brandValue+10,0,100);
+    G.status.image=clamp(G.status.image+5,0,100);
+    if(Math.random()>.7){
+      G.achievements.daesang=true;
+      addLog('special','👑 获得大赏！！！这是至高荣誉！');
+      toast('👑 大赏！！！','success');
+    } else {
+      addLog('good','🏆 获得奖项！品牌价值和形象大幅提升！');
+      toast('获奖了！🏆','success');
+    }
+  } else {
+    G.status.trending=clamp(G.status.trending+2,0,100);
+    addLog('good','出席颁奖典礼，增加了曝光');
+    toast('颁奖典礼出席完毕','info');
+  }
+  refreshAll();
+}
+
+function doCF(){
+  const earn=randInt(150000,250000);
+  G.status.money+=earn;G.totalEarnings+=earn;G.cfCount++;
+  G.status.image=clamp(G.status.image+3,0,100);
+  G.status.energy-=15;G.actions--;
+  G.sns.instagram+=randInt(3000,10000);
+  addLog('good',`完成广告拍摄！收入₩${formatMoney(earn)}`);
+  toast('广告拍摄完成！赚钱了~','success');refreshAll();
+}
+
+function doPrivateMeet(){
+  G.actions--;G.status.energy-=10;
+  // 随机选一个队友
+  const t=G.teammates[randInt(0,G.teammates.length-1)];
+  if(t.affinity>=60&&!G.romance){
+    // 可能触发恋爱
+    if(Math.random()>.4){
+      G.romance={target:t.name,day:G.day};
+      G.achievements.love_found=true;
+      showModal('💕 特殊事件',`你和${t.name}在私下聚会中，气氛变得微妙起来...<br>你们的关系似乎超越了友谊。`,
+        [{text:'确认关系',action:()=>{
+          addLog('special',`💕 和${t.name}开始了恋爱关系！`);
+          toast('恋爱了！但要注意保密哦~','warning');
+          closeModalDirect();refreshAll();
+        }},{text:'保持距离',action:()=>{
+          t.affinity=Math.max(t.affinity-10,0);
+          G.romance=null;
+          addLog('good','你选择了保持距离。');
+          closeModalDirect();refreshAll();
+        }}]);
+      return;
+    }
+  }
+  if(G.romance){
+    // 已恋爱中可能被曝光
+    if(Math.random()>.7){
+      showModal('⚠️ 危机！',`八卦媒体拍到了你和${G.romance.target}的亲密照！<br>公司要求你处理此事。`,
+        [{text:'公开道歉',action:()=>{
+          G.status.image=clamp(G.status.image-15,0,100);
+          G.status.companySat=clamp(G.status.companySat-10,0,100);
+          G.fans.anti+=randInt(1000,5000);
+          G.romance=null;
+          addLog('bad','💔 恋情曝光！公开道歉，形象大跌...');
+          toast('危机公关中...','error');
+          closeModalDirect();refreshAll();
+        }},{text:'否认到底',action:()=>{
+          if(Math.random()>.5){
+            G.status.trending+=10;
+            addLog('good','成功否认了恋情传闻。');
+            toast('成功渡过危机','info');
+          } else {
+            G.status.image=clamp(G.status.image-10,0,100);
+            G.fans.anti+=randInt(2000,8000);
+            G.romance=null;
+            addLog('bad','💔 证据确凿，否认失败！形象严重受损！');
+            toast('否认失败...','error');
+          }
+          closeModalDirect();refreshAll();
+        }}]);
+      return;
+    }
+    G.status.mood=clamp(G.status.mood+15,0,100);
+    addLog('good',`和${G.romance.target}度过了甜蜜的时光~ 心情大好！`);
+    toast('和TA度过了美好时光~','success');
+  } else {
+    G.status.mood=clamp(G.status.mood+5,0,100);
+    addLog('good',`和${t.name}愉快地聊了天，好感+3`);
+    t.affinity=clamp(t.affinity+3,0,100);
+    toast('聚会愉快~','info');
+  }
+  refreshAll();
+}
+
+function doSelfTrain(){
+  const stats=['vocal','dance','rap','variety','acting','charm'];
+  showModal('💪 自我提升','选择训练项目：',
+    stats.map(s=>{
+      const sn={vocal:'声乐',dance:'舞蹈',rap:'说唱',variety:'综艺感',acting:'演技',charm:'魅力'}[s];
+      return{text:sn,action:()=>{
+        const gain=randInt(2,3);
+        G.stats[s]=clamp(G.stats[s]+gain,0,100);
+        G.status.energy-=15;G.actions--;
+        addLog('good',`自我训练：${sn}+${gain}`);
+        toast(`${sn}+${gain}！`,'success');
+        closeModalDirect();refreshAll();
+      }};
+    }));
+}
+
+// ==================== SNS系统 ==================== */
+function doSNS(type){
+  G.snsUsed=true;
+  switch(type){
+    case 'selfie':
+      G.stats.visual=clamp(G.stats.visual+1,0,100);
+      G.sns.instagram+=randInt(500,3000);
+      addLog('good','发了自拍！Instagram粉丝增加！');
+      break;
+    case 'cover':
+      if(Math.random()>.5){
+        G.stats.vocal=clamp(G.stats.vocal+1,0,100);
+        G.sns.youtube+=randInt(1000,5000);
+        addLog('good','发了翻唱/舞蹈视频！获得好评！');
+      } else {
+        G.sns.youtube+=randInt(300,1000);
+        addLog('good','发了翻唱/舞蹈视频~');
+      }
+      break;
+    case 'daily':
+      G.status.mood=clamp(G.status.mood+3,0,100);
+      G.sns.twitter+=randInt(200,1000);
+      addLog('good','分享了日常生活~');
+      break;
+    case 'interact':
+      G.fans.group+=randInt(50,200);
+      G.sns.weverse+=randInt(100,500);
+      addLog('good','和粉丝们亲密互动！');
+      break;
+  }
+  toast('帖子发布成功！','success');
+  triggerRandomEvent('sns');refreshAll();
+}
+
+// ==================== 商店系统 ==================== */
+function buyItem(id){
+  if(G.shopUsed){toast('今天已经购买过了','warning');return}
+  const item=window._shopItems?.find(i=>i.id===id);
+  if(!item||G.status.money<item.price){toast('金币不足！','warning');return}
+  G.status.money-=item.price;G.shopUsed=true;
+  if(item.stat==='gift'){
+    // 随机选一个队友加好感
+    const t=G.teammates[randInt(0,G.teammates.length-1)];
+    t.affinity=clamp(t.affinity+item.val,0,100);
+    addLog('good',`送了礼物给${t.name}，好感+${item.val}`);
+    toast(`${t.name}很高兴收到礼物！`,'success');
+  } else if(item.stat==='energy'){
+    G.status.energy=clamp(G.status.energy+item.val,0,100);
+    addLog('good',`购买了${item.name}，体力+${item.val}`);
+    toast('体力恢复！','success');
+  } else if(item.stat==='mood'){
+    G.status.mood=clamp(G.status.mood+item.val,0,100);
+    addLog('good',`购买了${item.name}，心情+${item.val}`);
+    toast('心情变好了~','success');
+  } else {
+    G.stats[item.stat]=clamp(G.stats[item.stat]+item.val,0,100);
+    addLog('good',`购买了${item.name}，${item.stat}+${item.val}`);
+    toast('使用成功！','success');
+  }
+  refreshAll();
+}
+
+// ==================== 每日系统 ==================== */
+function doRest(){
+  G.status.energy=clamp(G.status.energy+25,0,100);
+  G.status.mood=clamp(G.status.mood+5,0,100);
+  toast('休息了一下，体力和心情有所恢复','info');
+  refreshAll();
+}
+
+function doNextDay(){
+  G.day++;G.actions=G.maxActions;G.snsUsed=false;G.shopUsed=false;
+  // 日常随机事件
+  triggerDailyEvent();
+  // 自然增长/衰减
+  G.status.mood=clamp(G.status.mood+randInt(-3,2),0,100);
+  G.status.trending=clamp(G.status.trending+randInt(-1,1),0,100);
+  if(G.status.mood<20) G.fans.anti+=randInt(10,50);
+  // SNS自然增长
+  if(G.status.trending>30){
+    const snsGain=Math.floor(G.status.trending*5);
+    G.sns.instagram+=snsGain;G.sns.twitter+=Math.floor(snsGain*.7);
+    G.sns.youtube+=Math.floor(snsGain*.5);G.sns.weverse+=Math.floor(snsGain*.3);
+  }
+  // 活跃期粉丝自然增长
+  if(G.phase==='active'&&G.status.trending>20){
+    const fg=Math.floor(G.status.trending*10);
+    G.fans.group+=fg;G.fans.overseas+=Math.floor(fg*.2);
+  }
+  // 队友好感微调
+  G.teammates.forEach(t=>{
+    if(Math.random()>.8) t.affinity=clamp(t.affinity+randInt(-2,1),0,100);
+  });
+  // 恋爱中每天好感变化
+  if(G.romance){
+    const rt=G.teammates.find(t=>t.name===G.romance.target);
+    if(rt) rt.affinity=clamp(rt.affinity+1,0,100);
+  }
+  addLog('info',`--- Day ${G.day} ---`);
+  toast(`Day ${G.day} 开始了！`,'info');
+  refreshAll();
+}
+
+// ==================== 随机事件系统 ==================== */
+const EVENTS={
+  train:[
+    {text:'🎤 你的练习被制作人注意到了！获得额外指导。',type:'good',effects:{vocal:3}},
+    {text:'💪 训练太累了，膝盖隐隐作痛...',type:'bad',effects:{energy:-10,mood:-5}},
+    {text:'🌟 练习室遇到了前辈，得到了鼓励！',type:'good',effects:{mood:10,charm:2}},
+    {text:'😤 和同期练习生发生了小摩擦...',type:'bad',effects:{mood:-8}},
+    {text:'📱 粉丝站更新了你的练习照，获得关注！',type:'good',effects:{trending:3}}
+  ],
+  work:[
+    {text:'💡 在打工时遇到了星探，获得了一点曝光！',type:'good',effects:{trending:2,money:5000}},
+    {text:'😴 打工太累了差点在练习时睡着...',type:'bad',effects:{energy:-5,mood:-3}},
+    {text:'🎬 被路人认出来了，有人拍了你的照片！',type:'good',effects:{sns:500}},
+    {text:'📋 额外接到了一个小活，收入不错！',type:'good',effects:{money:10000}}
+  ],
+  social:[
+    {text:'🎂 今天是队友的生日！一起庆祝吧~',type:'good',effects:{mood:15},teamAffinity:5},
+    {text:'🎭 在聚会上即兴表演了一段，获得好评！',type:'good',effects:{variety:2,charm:1}},
+    {text:'😤 聚会中被人说了闲话...',type:'bad',effects:{mood:-10}},
+    {text:'🤝 在聚会上认识了行业前辈！',type:'good',effects:{brandValue:3}}
+  ],
+  sns:[
+    {text:'🔥 你的帖子突然火了！',type:'good',effects:{trending:5},snsGain:5000},
+    {text:'😐 发了个帖子，反响平平...',type:'bad',effects:{}},
+    {text:'😂 粉丝在评论区制作了搞笑表情包！',type:'good',effects:{trending:2}},
+    {text:'😤 遇到了恶意评论...',type:'bad',effects:{mood:-5},antiGain:20}
+  ],
+  daily:[
+    {text:'☀️ 今天天气很好，心情不错！',type:'good',effects:{mood:8}},
+    {text:'🌧️ 下雨了，不想出门...',type:'bad',effects:{mood:-5}},
+    {text:'🌸 粉丝给你送了应援！',type:'good',effects:{mood:10,solo:50}},
+    {text:'📱 刷到了关于自己的好评文章！',type:'good',effects:{mood:5,image:2}},
+    {text:'😰 公司通知要加练...',type:'bad',effects:{mood:-8,energy:-10}},
+    {text:'🎵 无意间写出了一段好旋律！',type:'good',effects:{composing:2}},
+    {text:'🍕 被粉丝投喂了美食！',type:'good',effects:{mood:8}},
+    {text:'📊 公司发布了新的培训计划',type:'info',effects:{companySat:3}},
+    {text:'📱 网络上出现了黑粉攻击...',type:'bad',effects:{mood:-10,anti:50}},
+    {text:'🌟 有媒体发布了你的正面报道！',type:'good',effects:{trending:5,image:3}},
+    {text:'💤 昨晚熬夜了，今天精神不太好...',type:'bad',effects:{energy:-15}},
+    {text:'🎁 收到了匿名粉丝的礼物！',type:'good',effects:{mood:12}},
+    {text:'📢 公司宣布了新的出道计划安排！',type:'info',effects:{companySat:5}},
+    {text:'😤 被比较和其他练习生的实力...',type:'bad',effects:{mood:-8}},
+    {text:'🏆 在公司内部评选中获得了表扬！',type:'good',effects:{companySat:8,mood:5}}
+  ]
+};
+
+function triggerRandomEvent(context){
+  if(Math.random()>.45) return; // 45%概率触发
+  const pool=EVENTS[context]||EVENTS.daily;
+  const evt=pool[randInt(0,pool.length-1)];
+  applyEvent(evt);
+}
+
+function triggerDailyEvent(){
+  if(Math.random()>.6) return; // 40%概率触发每日事件
+  const pool=EVENTS.daily;
+  const evt=pool[randInt(0,pool.length-1)];
+  applyEvent(evt);
+}
+
+function applyEvent(evt){
+  // 应用属性变化
+  for(let k in evt.effects){
+    const v=evt.effects[k];
+    if(k==='energy') G.status.energy=clamp(G.status.energy+v,0,100);
+    else if(k==='mood') G.status.mood=clamp(G.status.mood+v,0,100);
+    else if(k==='money') G.status.money+=v;
+    else if(k==='trending') G.status.trending=clamp(G.status.trending+v,0,100);
+    else if(k==='image') G.status.image=clamp(G.status.image+v,0,100);
+    else if(k==='brandValue') G.status.brandValue=clamp(G.status.brandValue+v,0,100);
+    else if(k==='companySat') G.status.companySat=clamp(G.status.companySat+v,0,100);
+    else if(k==='solo') G.fans.solo+=v;
+    else if(k==='sns') G.sns.instagram+=v;
+    else if(k==='anti') G.fans.anti+=Math.abs(v);
+    else if(G.stats[k]!==undefined) G.stats[k]=clamp(G.stats[k]+v,0,100);
+  }
+  if(evt.snsGain){
+    G.sns.instagram+=evt.snsGain;
+    G.sns.twitter+=Math.floor(evt.snsGain*.5);
+  }
+  if(evt.teamAffinity){
+    G.teammates.forEach(t=>t.affinity=clamp(t.affinity+evt.teamAffinity,0,100));
+  }
+  addLog(evt.type==='bad'?'bad':evt.type==='special'?'special':'good', evt.text);
+  toast(evt.text, evt.type==='bad'?'error':evt.type==='info'?'info':'success');
+}
+
+// ==================== 日志系统 ==================== */
+function addLog(type,text){
+  G.logs.push({type,text,day:G.day});
+}
+
+// ==================== 存档/读档 ==================== */
+function saveGame(){
+  try{
+    localStorage.setItem('idol_sim_save',JSON.stringify(G));
+    toast('存档成功！','success');
+    addLog('info','💾 游戏已存档');
+  }catch(e){toast('存档失败！','error')}
+}
+
+function loadGame(){
+  try{
+    const data=localStorage.getItem('idol_sim_save');
+    if(!data){toast('没有找到存档！','warning');return}
+    G=JSON.parse(data);
+    document.getElementById('title-screen').style.display='none';
+    document.getElementById('create-screen').style.display='none';
+    document.getElementById('game-screen').style.display='flex';
+    toast('读档成功！','success');
+    addLog('info','📂 游戏已读档');
+    refreshAll();
+  }catch(e){toast('读档失败！','error')}
+}
+
+// ==================== UI工具 ==================== */
+function switchTab(name){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
+  document.querySelectorAll('.tab-page').forEach(p=>p.classList.toggle('active',p.id==='tab-'+name));
+}
+
+function showModal(title,body,choices){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-body').innerHTML=body;
+  const cc=document.getElementById('modal-choices');
+  cc.innerHTML='';
+  if(choices){
+    choices.forEach(ch=>{
+      const btn=document.createElement('button');
+      btn.className='modal-choice';
+      btn.textContent=ch.text;
+      btn.onclick=ch.action;
+      cc.appendChild(btn);
+    });
+  }
+  document.getElementById('modal-footer').innerHTML='';
+  document.getElementById('modal-overlay').style.display='flex';
+}
+
+function closeModal(e){
+  if(e.target===document.getElementById('modal-overlay')) closeModalDirect();
+}
+
+function closeModalDirect(){
+  document.getElementById('modal-overlay').style.display='none';
+}
+
+function toast(msg,type='info'){
+  const c=document.getElementById('toast-container');
+  const t=document.createElement('div');
+  t.className=`toast ${type}`;
+  t.textContent=msg;
+  c.appendChild(t);
+  setTimeout(()=>t.remove(),3000);
+}
+
+function unlock(id){
+  if(!G.achievements[id]){
+    G.achievements[id]=true;
+    toast(`成就解锁：${ACHIEVEMENTS[id].icon} ${ACHIEVEMENTS[id].name}！`,'success');
+    addLog('special',`🏆 解锁成就「${ACHIEVEMENTS[id].name}」！`);
+  }
+}
+
+// ==================== 工具函数 ==================== */
+function randInt(min,max){return Math.floor(Math.random()*(max-min+1))+min}
+function clamp(v,min,max){return Math.max(min,Math.min(max,v))}
+function formatMoney(n){
+  if(n>=100000000) return (n/100000000).toFixed(1)+'亿';
+  if(n>=10000) return (n/10000).toFixed(0)+'万';
+  return n.toLocaleString();
+}
+function formatFans(n){
+  if(n>=1000000) return (n/1000000).toFixed(1)+'M';
+  if(n>=1000) return (n/1000).toFixed(1)+'K';
+  return n.toString();
+}
+</script>
+</body>
+</html>
